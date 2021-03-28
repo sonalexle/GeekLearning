@@ -414,25 +414,25 @@ class Resnet(pl.LightningModule):
         return F.softmax(self.resnet(x), dim=1)
 
     def configure_optimizers(self):
-        opt_ft_ext = torch.optim.SGD(
-            self.parameters(),
-            lr=self.hparams.learning_rate,
-            weight_decay=self.hparams.weight_decay,
-            momentum=0.9
-        )
+        # opt_ft_ext = torch.optim.SGD(
+        #     self.parameters(),
+        #     lr=self.hparams.learning_rate,
+        #     weight_decay=self.hparams.weight_decay,
+        #     momentum=0.9
+        # )
         opt_finetuning = torch.optim.Adam(
             self.parameters(),
             lr=self.hparams.learning_rate,
             weight_decay=self.hparams.weight_decay,
             betas=(0.9, 0.95)
         )
-        base_scheduler = torch.optim.lr_scheduler.StepLR(
-            opt_finetuning, self.hparams.stepsize, gamma=self.hparams.gamma
-        )
-        sched_ft_ext = {
-            'scheduler': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt_ft_ext, T_0=self.hparams.stepsize),
-            'interval': 'epoch'
-        }
+        # base_scheduler = torch.optim.lr_scheduler.StepLR(
+        #     opt_finetuning, self.hparams.stepsize, gamma=self.hparams.gamma
+        # )
+        # sched_ft_ext = {
+        #     'scheduler': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt_ft_ext, T_0=self.hparams.stepsize),
+        #     'interval': 'epoch'
+        # }
         sched_finetuning = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
                 opt_finetuning, 'max', patience=self.hparams.stepsize
@@ -441,10 +441,10 @@ class Resnet(pl.LightningModule):
             'reduce_on_plateau': True,
             'monitor': 'val_acc'
         }
-        if self.feature_extract:
-            return [opt_ft_ext], [sched_ft_ext]
-        else:
-            return [opt_finetuning], [sched_finetuning]
+        # if self.feature_extract:
+        #     return [opt_ft_ext], [sched_ft_ext]
+        # else:
+        return [opt_finetuning], [sched_finetuning]
 
     def training_step(self, batch, batch_idx):
         x, y = batch
