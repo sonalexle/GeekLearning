@@ -36,16 +36,18 @@ class ACP(Dataset):
         return image, label
 
 
-def make_dataloader_from_h5(h5file, batch_size=64, num_workers=0):
-    paths_and_labels = utils.prepare_csv(h5file)
-    paths, labels = utils.read_from_csv(paths_and_labels)
-    transform = transforms.Compose(
-        transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    )
+def loader_from_h5(h5file, h5path, batch_size=64, num_workers=0, transform=None):
+    paths_and_labels = utils.prepare_csv(h5file, h5path, write=False)
+    paths, labels = utils.read_from_csv(df=paths_and_labels)
+    if not transform:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
     return DataLoader(
-        ACP(paths, labels, h5file),
+        ACP(paths, labels, h5file, transform=transform),
         batch_size=batch_size,
-        num_workers=self.num_workers,
+        num_workers=num_workers,
         shuffle=False,
     )
 
@@ -70,8 +72,8 @@ class ACPDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shuffle_train = shuffle_train
-        self.csv_train = "../lookup_csvs/imageclasslookup_train.csv"
-        self.csv_test = "../lookup_csvs/imageclasslookup_test.csv"
+        self.csv_train = "./lookup_csvs/imageclasslookup_train.csv"
+        self.csv_test = "./lookup_csvs/imageclasslookup_test.csv"
         random_transforms = [
             transforms.RandomGrayscale(),
             transforms.ColorJitter(),
@@ -118,12 +120,11 @@ class ACPDataModule(pl.LightningDataModule):
                 *utils.read_from_csv(self.csv_train),
                 val_size=0.15 if not self.h5testfile else 0.2,
                 test_size=0.15 if not self.h5testfile else None,
+                rs_train=69, rs_test=69
             )
-            shutil.rmtree(os.path.dirname(self.csv_train))
             if self.h5testfile:
                 splits.update({"test": utils.read_from_csv(self.csv_test)})
-                shutil.rmtree(os.path.dirname(self.csv_test))
-
+            shutil.rmtree(os.path.dirname(self.csv_train))
             data_splits = "../data/data_splits"
             currenttime = strftime("%Y-%m-%dT%Hh%Mm%Ss", gmtime())
             split_save_dir = os.path.join(data_splits, currenttime)
@@ -202,7 +203,7 @@ class LinearClassifier(pl.LightningModule):
         c, w, h = input_dim
         self.dims = c * w * h
         self.save_hyperparameters("learning_rate", "stepsize", "gamma", "weight_decay", "hinge_deg")
-        self.example_input_array = torch.rand(1, 3, 64, 64)
+        self.example_input_array = torch.rand(1, 3, 64, 64, device=self.device)
         latent_dim = self.dims if not use_vae else 512
         if model_class == "LogisticRegression":
             self.criterion = nn.CrossEntropyLoss()
@@ -259,7 +260,10 @@ class LinearClassifier(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay
+            self.parameters(),
+            lr=self.hparams.learning_rate,
+            weight_decay=self.hparams.weight_decay,
+            betas=(0.9, 0.95)
         )
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, self.hparams.stepsize, gamma=self.hparams.gamma
@@ -310,11 +314,11 @@ class MLP(pl.LightningModule):
         self.train_acc = pl.metrics.Accuracy()
         self.val_acc = pl.metrics.Accuracy()
         self.test_acc = pl.metrics.Accuracy()
-        self.example_input_array = torch.rand(1, 3, 64, 64)
+        self.example_input_array = torch.rand(1, 3, 64, 64, device=self.device)
         self.backbone = MLPTorch(num_classes=num_classes, input_dim=input_dim)
 
     def forward(self, x):
-        return self.backbone(x)
+        return F.softmax(self.backbone(x), dim=1)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
@@ -347,7 +351,10 @@ class MLP(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay
+            self.parameters(),
+            lr=self.hparams.learning_rate,
+            weight_decay=self.hparams.weight_decay,
+            betas=(0.9, 0.95)
         )
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, self.hparams.stepsize, gamma=self.hparams.gamma
@@ -395,7 +402,7 @@ class Resnet(pl.LightningModule):
         super().__init__()
         self.num_classes = num_classes
         self.dims = input_dim
-        self.example_input_array = torch.rand(1, 3, 64, 64)
+        self.example_input_array = torch.rand(1, 3, 64, 64, device=self.device)
         self.feature_extract = feature_extract
         self.save_hyperparameters("learning_rate", "stepsize", "gamma", "weight_decay")
         self.train_acc = pl.metrics.Accuracy()
@@ -404,16 +411,40 @@ class Resnet(pl.LightningModule):
         self.resnet = ResnetTorch(self.num_classes, resnet_base=resnet_base)
 
     def forward(self, x):
-        return self.resnet(x)
+        return F.softmax(self.resnet(x), dim=1)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay
+        opt_ft_ext = torch.optim.SGD(
+            self.parameters(),
+            lr=self.hparams.learning_rate,
+            weight_decay=self.hparams.weight_decay,
+            momentum=0.9
         )
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, self.hparams.stepsize, gamma=self.hparams.gamma
+        opt_finetuning = torch.optim.Adam(
+            self.parameters(),
+            lr=self.hparams.learning_rate,
+            weight_decay=self.hparams.weight_decay,
+            betas=(0.9, 0.95)
         )
-        return [optimizer], [scheduler]
+        base_scheduler = torch.optim.lr_scheduler.StepLR(
+            opt_finetuning, self.hparams.stepsize, gamma=self.hparams.gamma
+        )
+        sched_ft_ext = {
+            'scheduler': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt_ft_ext, T_0=self.hparams.stepsize),
+            'interval': 'epoch'
+        }
+        sched_finetuning = {
+            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
+                opt_finetuning, 'max', patience=self.hparams.stepsize
+            ),
+            'interval': 'epoch',
+            'reduce_on_plateau': True,
+            'monitor': 'val_acc'
+        }
+        if self.feature_extract:
+            return [opt_ft_ext], [sched_ft_ext]
+        else:
+            return [opt_finetuning], [sched_finetuning]
 
     def training_step(self, batch, batch_idx):
         x, y = batch

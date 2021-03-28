@@ -1,13 +1,16 @@
 import pandas as pd
 import argparse
 import matplotlib.pyplot as plt
-from pytorch_lightning.metrics.functional import accuracy
 import torch
 import torch.nn.functional as F
+from torchvision import transforms
 from sklearn.model_selection import train_test_split
 import numpy as np
 import sys, getopt, os, glob
 import hiddenlayer as hl
+from PIL import Image, ImageFile
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 help_args = ("g", "help")
 indir, indir_args = None, ("i:", "indir=")
@@ -75,23 +78,31 @@ def plot_images(images, n_rows=1):
     plt.tight_layout(w_pad=0)
 
 
-def compute_accuracy(model, *loaders, device="cuda:0"):
+def compute_accuracy(
+    model,
+    *loaders,
+    device="cuda:0",
+    accuracy=True,
+    criterion=torch.nn.CrossEntropyLoss(reduction="sum")
+):
     model.eval()
     device = torch.device(device)
     model = model.to(device)
-    correct = 0
-    total = 0
-    loss = 0
+    agg, total, loss = 0, 0, 0
     with torch.no_grad():
         for loader in loaders:
             for images, labels in loader:
                 images, labels = images.to(device), labels.to(device)
                 outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                loss += F.cross_entropy(outputs, labels, reduction="sum").item()
+                predicted = torch.argmax(outputs.data, 1)
+                loss += criterion(outputs, labels).item()
                 total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-    return correct / total, loss / total
+                if accuracy:
+                    compare = predicted == labels
+                else:
+                    compare = predicted != labels
+                agg += compare.sum().item()
+    return agg / total, loss / total
 
 
 def train_val_test_split(X, y, val_size, test_size=None, rs_train=None, rs_test=69):
@@ -129,13 +140,11 @@ def test_predictions(loader, classes, *models, num_images=8, device="cuda:0"):
     with torch.no_grad():
         rand_idx = torch.randperm(loader.batch_size)[:num_images]
         images, labels = iter(loader).next()
-        images = images[rand_idx]
-        labels = labels[rand_idx]
+        images, labels = images[rand_idx], labels[rand_idx]
         ncol = 4
         n_rows = images.size(0) // ncol
         plot_images(images, n_rows=n_rows)
-        images = images.to(device)
-        labels = labels.to(device)
+        images, labels = images.to(device), labels.to(device)
         count = 0
         for model in models:
             model = model.to(device)
@@ -168,9 +177,11 @@ def prepare_csv(h5file, path, write=True):
     return df
 
 
-def read_from_csv(csvpath, df=None):
-    if not df:
+def read_from_csv(csvpath=None, df=None):
+    assert csvpath is not None or df is not None, "at least one arg should be supplied"
+    if df is None:
         df = pd.read_csv(csvpath)
+    df = df.astype({"class": 'int64'})
     paths = df["imagepath"].to_numpy()
     labels = df["class"].to_numpy()
     return np.vstack((paths, labels))
@@ -215,6 +226,33 @@ def render_graph(
     dot.attr("graph", rankdir=orient) #Left-Right
     dot.format = format
     dot.render(save_path)
+
+
+def convert_img(img, out_size=None, out_mode=None):
+    if out_size:
+        img = img.resize(out_size)
+    if out_mode:
+        img = img.convert(out_mode)
+    return img
+
+
+def predict_one(img_path, model, classes, input_size=(64, 64), input_mode="RGB"):
+    pathname, extension = os.path.splitext(img_path)
+    basename = os.path.basename(pathname)
+    try:
+        img = Image.open(img_path)
+    except Exception as e:
+        print("Invalid image")
+        return
+    img = convert_img(img, out_size=input_size, out_mode=input_mode)
+    transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+    img = transform(img).unsqueeze(0)
+    pred = model(img)
+    return img, pred
+
 
 
 if __name__ == "__main__":
