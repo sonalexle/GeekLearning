@@ -262,8 +262,7 @@ class LinearClassifier(pl.LightningModule):
         optimizer = torch.optim.Adam(
             self.parameters(),
             lr=self.hparams.learning_rate,
-            weight_decay=self.hparams.weight_decay,
-            betas=(0.9, 0.95)
+            weight_decay=self.hparams.weight_decay
         )
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, self.hparams.stepsize, gamma=self.hparams.gamma
@@ -353,8 +352,7 @@ class MLP(pl.LightningModule):
         optimizer = torch.optim.Adam(
             self.parameters(),
             lr=self.hparams.learning_rate,
-            weight_decay=self.hparams.weight_decay,
-            betas=(0.9, 0.95)
+            weight_decay=self.hparams.weight_decay
         )
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, self.hparams.stepsize, gamma=self.hparams.gamma
@@ -423,8 +421,7 @@ class Resnet(pl.LightningModule):
         opt_finetuning = torch.optim.Adam(
             self.parameters(),
             lr=self.hparams.learning_rate,
-            weight_decay=self.hparams.weight_decay,
-            betas=(0.9, 0.95)
+            weight_decay=self.hparams.weight_decay
         )
         # base_scheduler = torch.optim.lr_scheduler.StepLR(
         #     opt_finetuning, self.hparams.stepsize, gamma=self.hparams.gamma
@@ -433,18 +430,19 @@ class Resnet(pl.LightningModule):
         #     'scheduler': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt_ft_ext, T_0=self.hparams.stepsize),
         #     'interval': 'epoch'
         # }
+        lr_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            opt_finetuning, mode='max', patience=self.hparams.stepsize
+        )
         sched_finetuning = {
-            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
-                opt_finetuning, 'max', patience=self.hparams.stepsize
-            ),
-            'interval': 'epoch',
+            'scheduler': lr_plateau,
             'reduce_on_plateau': True,
             'monitor': 'val_acc'
         }
         # if self.feature_extract:
         #     return [opt_ft_ext], [sched_ft_ext]
         # else:
-        return [opt_finetuning], [sched_finetuning]
+        # return [opt_finetuning], [sched_finetuning]
+        return {'optimizer': opt_finetuning, 'lr_scheduler': sched_finetuning}
 
     def training_step(self, batch, batch_idx):
         x, y = batch
