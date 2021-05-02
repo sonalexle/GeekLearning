@@ -83,36 +83,46 @@ def compute_accuracy(
     *loaders,
     device="cuda:0",
     accuracy=True,
-    criterion=torch.nn.CrossEntropyLoss(reduction="sum")
+    criterion=torch.nn.CrossEntropyLoss()
 ):
     model.eval()
     device = torch.device(device)
     model = model.to(device)
-    agg, total, loss = 0, 0, 0
+    acc, total, loss = 0, 0, 0
+    # To calculate average loss over all batches:
+    # running_loss += batch_loss * size_of_current_batch (reduction='mean')
+    # Divide running_loss by total of samples: sum_i len(loader_i.sampler)
+    # or accumulate sizes of each batch in a loop.
+    # Another way: append batch losses in a list (reduction='mean')
+    # and take the mean of that list.
+    # That is, divide the sum of batch losses by the number of batches.
+    # Never use reduction='sum' (?) because some sums are not over the batches
+    # e.g., multi-target NLL-loss.
     with torch.no_grad():
         for loader in loaders:
             for images, labels in loader:
                 images, labels = images.to(device), labels.to(device)
                 outputs = model(images)
-                predicted = torch.argmax(outputs.data, 1)
-                loss += criterion(outputs, labels).item()
+                loss += criterion(outputs, labels).item() * labels.size(0)
                 total += labels.size(0)
-                if accuracy:
-                    compare = predicted == labels
-                else:
-                    compare = predicted != labels
-                agg += compare.sum().item()
-    return agg / total, loss / total
+                predicted = torch.argmax(outputs, dim=1)
+                acc += (predicted == labels).sum().item()
+    acc = acc/total
+    if not accuracy:
+        acc = 1 - acc # 0/1 loss = 1 - accuracy
+    return acc, loss/total
 
 
 def train_val_test_split(X, y, val_size, test_size=None, rs_train=None, rs_test=69):
     """
-    If test_size is None: returns a train set and a validation set
-    Else: returns a train set, validation set, and test set
-    rs_train, rs_test: random states for train split, test split
-    If test_size is not None: the test set will be produced first
+    Args:
+        test_size: optional proportion value. If not supplied,
+            returns a train set and a validation set, 
+            else returns a train set, validation set, and test set
+        rs_train, rs_test: random states for train split, test split
+    If test_size is supplied, the test set will be produced first
     then another split is performed on the remaining data to create
-    a train set and a validation set. By this way, we can produce
+    a train set and a validation set. Using this method, we can produce
     the same test set but random train and validation sets if only
     rs_test is defined.
     """
@@ -242,7 +252,7 @@ def predict_one(img_path, model, classes, input_size=(64, 64), input_mode="RGB")
     try:
         img = Image.open(img_path)
     except Exception as e:
-        print("Invalid image")
+        print(e)
         return
     img = convert_img(img, out_size=input_size, out_mode=input_mode)
     transform = transforms.Compose([

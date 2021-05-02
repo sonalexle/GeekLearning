@@ -14,7 +14,26 @@ from time import gmtime, strftime
 
 
 class ACP(Dataset):
+    """
+    Subclass of torch.utils.data.Dataset, handles images stored in hdf5 files.
+    The images in the hdf5 file should be arranged in this way:
+    class1/a.png
+    class1/[...]/c.png
+
+    class2/a.png
+    class2/[...]/d.png
+    """
     def __init__(self, paths, labels, h5file=None, transform=None):
+        """
+        Parameters
+        ----------
+        paths: array-like
+            paths to images (within the hdf5 file)
+        labels: array-like
+            labels corresponding to the paths
+        h5file: h5py.File, optional
+            The hdf5 file. Must be open.
+        """
         self.X = paths
         self.y = labels
         self.h5file = h5file
@@ -37,6 +56,7 @@ class ACP(Dataset):
 
 
 def loader_from_h5(h5file, h5path, batch_size=64, num_workers=0, transform=None):
+    """Creates a DataLoader from a hdf5 file."""
     paths_and_labels = utils.prepare_csv(h5file, h5path, write=False)
     paths, labels = utils.read_from_csv(df=paths_and_labels)
     if not transform:
@@ -64,6 +84,17 @@ class ACPDataModule(pl.LightningDataModule):
         augment="all",
         eval=False,
     ):
+        """
+        Args:
+            h5testfile: Optional hdf5 test file. If None (default), the trainset 
+                will consist of 70% train, 15% validation, and 15% test. 
+                If supplied, the trainset will consist of 80% train and 20% validation.  
+            datasplitdir: Optional path to a data split directory 
+                created in previous train sessions by objects of class `ACPDAtaModule`. 
+                If supplied, the object will use data splits specified by the files 
+                in this directory. Inside the directory there must be three files: 
+                train.npy, val.npy, and test.npy.
+        """
         if datasplitdir:
             assert os.path.exists(datasplitdir), "Wrong data directory"
         self.datasplitdir = datasplitdir
@@ -103,37 +134,41 @@ class ACPDataModule(pl.LightningDataModule):
     def prepare_data(self):
         if not self.datasplitdir:
             dirname = os.path.dirname(self.csv_train)
-            if not os.path.exists(dirname):
-                os.makedirs(dirname)
+            if not os.path.exists(dirname): os.makedirs(dirname)
             utils.prepare_csv(self.h5trainfile, self.csv_train)
             if self.h5testfile:
                 dirname = os.path.dirname(self.csv_test)
-                if not os.path.exists(dirname):
-                    os.makedirs(dirname)
+                if not os.path.exists(dirname): os.makedirs(dirname)
                 utils.prepare_csv(self.h5testfile, self.csv_test)
 
-    def setup(self, stage=None):
+    def setup(self, stage=None, rs_train=69, rs_test=69):
         phases = ["train", "val", "test"]
 
+        # performs the splits if not supplied
         if not self.datasplitdir:
             splits = utils.train_val_test_split(
                 *utils.read_from_csv(self.csv_train),
                 val_size=0.15 if not self.h5testfile else 0.2,
                 test_size=0.15 if not self.h5testfile else None,
-                rs_train=69, rs_test=69
+                rs_train=rs_train, rs_test=rs_test
             )
+            # if h5testfile is supplied, add it to the splits
+            # (currently consisting of train and val)
             if self.h5testfile:
                 splits.update({"test": utils.read_from_csv(self.csv_test)})
+
+            # delete the generated csv files
             shutil.rmtree(os.path.dirname(self.csv_train))
+
+            # saves the splits for later use
             data_splits = "../data/data_splits"
             currenttime = strftime("%Y-%m-%dT%Hh%Mm%Ss", gmtime())
             split_save_dir = os.path.join(data_splits, currenttime)
-            if not os.path.exists(split_save_dir):
-                os.makedirs(split_save_dir)
-
+            if not os.path.exists(split_save_dir): os.makedirs(split_save_dir)
             for phase in phases:
                 np.save(f"{split_save_dir}/{phase}", splits[phase])
 
+        # if splits are known, load from the supplied path
         else:
             splits = {
                 phase: np.load(f"{self.datasplitdir}/{phase}.npy", allow_pickle=True)
@@ -191,12 +226,12 @@ class LinearClassifier(pl.LightningModule):
         num_classes=3,
         model_class="LogisticRegression",
         input_dim=(3, 64, 64),
-        use_vae=False,
         learning_rate=0.001,
         stepsize=5,
         gamma=0.5,
         hinge_deg=1,
         weight_decay=1e-3,
+        use_vae=False
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -214,15 +249,15 @@ class LinearClassifier(pl.LightningModule):
         self.val_acc = pl.metrics.Accuracy()
         self.test_acc = pl.metrics.Accuracy()
         self.backbone = []
-        if use_vae:
-            from pl_bolts.models.autoencoders import VAE
+        # if use_vae:
+        #     from pl_bolts.models.autoencoders import VAE
 
-            vae_ckpt = (
-                "C:\\Users\\towab\\.cache\\torch\\hub\\checkpoints\\epoch=89.ckpt"
-            )
-            vae = VAE(input_height=64).load_from_checkpoint(vae_ckpt)
-            vae.freeze()
-            self.backbone.append(vae)
+        #     vae_ckpt = (
+        #         "C:\\Users\\towab\\.cache\\torch\\hub\\checkpoints\\epoch=89.ckpt"
+        #     )
+        #     vae = VAE(input_height=64).load_from_checkpoint(vae_ckpt)
+        #     vae.freeze()
+        #     self.backbone.append(vae)
         self.backbone.append(LinearModel(latent_dim, self.num_classes))
         self.backbone = nn.Sequential(*self.backbone)
 
@@ -431,7 +466,8 @@ class Resnet(pl.LightningModule):
         #     'interval': 'epoch'
         # }
         lr_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            opt_finetuning, mode='max', patience=self.hparams.stepsize
+            opt_finetuning, mode='max', patience=self.hparams.stepsize,
+            factor=self.hparams.gamma
         )
         sched_finetuning = {
             'scheduler': lr_plateau,
