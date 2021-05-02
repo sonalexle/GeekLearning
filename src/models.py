@@ -469,7 +469,7 @@ class Resnet(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.resnet(x)
+        yhat = self.main(x)
         loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.train_acc(preds, y)
@@ -478,7 +478,7 @@ class Resnet(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.resnet(x)
+        yhat = self.main(x)
         loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.val_acc(preds, y)
@@ -488,7 +488,7 @@ class Resnet(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.resnet(x)
+        yhat = self.main(x)
         loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.test_acc(preds, y)
@@ -498,4 +498,4 @@ class Resnet(pl.LightningModule):
 
     def set_parameter_requires_grad(self, freeze: bool, layers: list = None):
         self.feature_extract = freeze
-        self.resnet.set_parameter_requires_grad(freeze=freeze, layers=layers)
+        self.main.set_parameter_requires_grad(freeze=freeze, layers=layers)
