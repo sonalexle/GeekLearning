@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, datasets, models
 import pytorch_lightning as pl
@@ -248,7 +247,8 @@ class LinearClassifier(pl.LightningModule):
         self.train_acc = pl.metrics.Accuracy()
         self.val_acc = pl.metrics.Accuracy()
         self.test_acc = pl.metrics.Accuracy()
-        self.backbone = []
+        self.softmax = nn.Softmax(dim=1)
+        self.main = []
         # if use_vae:
         #     from pl_bolts.models.autoencoders import VAE
 
@@ -257,16 +257,16 @@ class LinearClassifier(pl.LightningModule):
         #     )
         #     vae = VAE(input_height=64).load_from_checkpoint(vae_ckpt)
         #     vae.freeze()
-        #     self.backbone.append(vae)
-        self.backbone.append(LinearModel(latent_dim, self.num_classes))
-        self.backbone = nn.Sequential(*self.backbone)
+        #     self.main.append(vae)
+        self.main.append(LinearModel(latent_dim, self.num_classes))
+        self.main = nn.Sequential(*self.main)
 
     def forward(self, x):
-        return self.backbone(x)
+        return self.softmax(self.main(x))
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.backbone(x)
+        yhat = self.main(x)
         loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.train_acc(preds, y)
@@ -275,7 +275,7 @@ class LinearClassifier(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.backbone(x)
+        yhat = self.main(x)
         loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.val_acc(preds, y)
@@ -285,7 +285,7 @@ class LinearClassifier(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.backbone(x)
+        yhat = self.main(x)
         loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.test_acc(preds, y)
@@ -349,15 +349,17 @@ class MLP(pl.LightningModule):
         self.val_acc = pl.metrics.Accuracy()
         self.test_acc = pl.metrics.Accuracy()
         self.example_input_array = torch.rand(1, 3, 64, 64, device=self.device)
-        self.backbone = MLPTorch(num_classes=num_classes, input_dim=input_dim)
+        self.criterion = nn.CrossEntropyLoss()
+        self.softmax = nn.Softmax(dim=1)
+        self.main = MLPTorch(num_classes=num_classes, input_dim=input_dim)
 
     def forward(self, x):
-        return F.softmax(self.backbone(x), dim=1)
+        return self.softmax(self.main(x))
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.backbone(x)
-        loss = F.cross_entropy(yhat, y)
+        yhat = self.main(x)
+        loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.train_acc(preds, y)
         self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
@@ -365,8 +367,8 @@ class MLP(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.backbone(x)
-        loss = F.cross_entropy(yhat, y)
+        yhat = self.main(x)
+        loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.val_acc(preds, y)
         self.log("val_loss", loss, prog_bar=False)
@@ -375,8 +377,8 @@ class MLP(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        yhat = self.backbone(x)
-        loss = F.cross_entropy(yhat, y)
+        yhat = self.main(x)
+        loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.test_acc(preds, y)
         self.log("test_loss", loss, prog_bar=True)
@@ -441,30 +443,19 @@ class Resnet(pl.LightningModule):
         self.train_acc = pl.metrics.Accuracy()
         self.val_acc = pl.metrics.Accuracy()
         self.test_acc = pl.metrics.Accuracy()
-        self.resnet = ResnetTorch(self.num_classes, resnet_base=resnet_base)
+        self.criterion = nn.CrossEntropyLoss()
+        self.softmax = nn.Softmax(dim=1)
+        self.main = ResnetTorch(self.num_classes, resnet_base=resnet_base)
 
     def forward(self, x):
-        return F.softmax(self.resnet(x), dim=1)
+        return self.softmax(self.main(x))
 
     def configure_optimizers(self):
-        # opt_ft_ext = torch.optim.SGD(
-        #     self.parameters(),
-        #     lr=self.hparams.learning_rate,
-        #     weight_decay=self.hparams.weight_decay,
-        #     momentum=0.9
-        # )
         opt_finetuning = torch.optim.Adam(
             self.parameters(),
             lr=self.hparams.learning_rate,
             weight_decay=self.hparams.weight_decay
         )
-        # base_scheduler = torch.optim.lr_scheduler.StepLR(
-        #     opt_finetuning, self.hparams.stepsize, gamma=self.hparams.gamma
-        # )
-        # sched_ft_ext = {
-        #     'scheduler': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt_ft_ext, T_0=self.hparams.stepsize),
-        #     'interval': 'epoch'
-        # }
         lr_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(
             opt_finetuning, mode='max', patience=self.hparams.stepsize,
             factor=self.hparams.gamma
@@ -474,16 +465,12 @@ class Resnet(pl.LightningModule):
             'reduce_on_plateau': True,
             'monitor': 'val_acc'
         }
-        # if self.feature_extract:
-        #     return [opt_ft_ext], [sched_ft_ext]
-        # else:
-        # return [opt_finetuning], [sched_finetuning]
         return {'optimizer': opt_finetuning, 'lr_scheduler': sched_finetuning}
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         yhat = self.resnet(x)
-        loss = F.cross_entropy(yhat, y)
+        loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.train_acc(preds, y)
         self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
@@ -492,7 +479,7 @@ class Resnet(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         yhat = self.resnet(x)
-        loss = F.cross_entropy(yhat, y)
+        loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.val_acc(preds, y)
         self.log("val_loss", loss, prog_bar=False)
@@ -502,7 +489,7 @@ class Resnet(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         yhat = self.resnet(x)
-        loss = F.cross_entropy(yhat, y)
+        loss = self.criterion(yhat, y)
         preds = torch.argmax(yhat, dim=1)
         self.test_acc(preds, y)
         self.log("test_loss", loss, prog_bar=True)
