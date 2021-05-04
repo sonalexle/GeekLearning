@@ -3,7 +3,8 @@
 if __name__ == "__main__":
 
     from utils import argparser
-    from models import ACPDataModule, MLP, Resnet, LinearClassifier
+    from models import MLP, Resnet, LinearClassifier
+    from dataloading import ACPDataModule
     import pytorch_lightning as pl
     import h5py, sys
     from pytorch_lightning.callbacks.early_stopping import EarlyStopping
