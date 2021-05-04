@@ -1,0 +1,109 @@
+html {
+    /* font-size: 10px; */
+    font-family: 'Roboto', sans-serif;
+}
+
+.wrap {
+    float: left;
+    position: relative;
+    left: 50%;
+}
+
+#results_body {
+    text-align: justify;
+}
+
+.content {
+    float: left;
+    position: relative;
+    left: -50%;
+}
+
+#error_msg {
+    color: red;
+}
+
+form {
+    display: inline-block;
+}
+
+thead, tfoot {
+    background-color: #3f87a6;
+    color: #fff;
+}
+
+tbody {
+    background-color: #e4f0f5;
+}
+
+caption {
+    padding: 10px;
+    caption-side: bottom;
+}
+
+table.dataframe, .dataframe th, .dataframe td {
+    border: none;
+    border-bottom: 1px solid #C8C8C8;
+    border-collapse: collapse;
+    text-align:left;
+    padding: 10px;
+    margin-bottom: 40px;
+    font-size: 0.9em;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.dataframe td {
+    text-align: center;
+}
+
+.data th {
+    background-color: #0e940e;
+    color: white;
+}
+
+tr:nth-child(odd)		{ background-color:#eee; }
+tr:nth-child(even)	{ background-color:#fff; }
+tr:hover            { background-color: #ffff99;}
+
+.prediction {
+    color: red;
+}
+
+form li, form div > p {
+    background: #eee;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    list-style-type: none;
+    border: 1px solid black;
+}
+
+ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+form img {
+    height: 64px;
+    order: 1;
+}
+
+form div p {
+    line-height: 32px;
+    padding-left: 10px;
+}
+
+#upload_label, form button {
+    padding: 5px 10px;
+    background-color: wheat;
+    border-radius: 5px;
+    border: 1px ridge black;
+    font-size: 0.8rem;
+    height: auto;
+}
+
+#upload_label:hover, button:hover {
+    color: white;
+    background-color: #3c7fb1;
+ }

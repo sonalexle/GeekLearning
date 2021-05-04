@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Predictions of {{ model_name }}</title>
+        <link href="../static/style.css" rel="stylesheet">
+        <link rel="preconnect" href="https://fonts.gstatic.com">
+        <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    </head>
+    <div class="wrap">
+        <div class="content">
+            <body id="results_body">
+            {% for table in tables %}
+                {{ table|safe }}
+            {% endfor %}
+            {% for classname, prob in  class_prob_pair.items() %}
+            <p>
+                I, <span class="prediction">{{ model_name }}</span>, am <span class="prediction">{{ prob }}%</span> 
+                sure that the image looks <span class="prediction">{{ classname }}</span>.<br>
+                Be careful when interpreting this number as<br>
+                these predicted "probabilities" sum up to 1<br>
+                (they are the outputs of the <a href="https://en.wikipedia.org/wiki/Softmax_function">softmax function</a>).
+            </p>
+            {% endfor %}
+            <a href={{ url_for('upload_file') }}>Go back to the beginning. Note that if you click on this,<br>
+                you need to (re-)upload the image. If you don't want<br>
+                to re-upload, use the "back" button of your browser.
+            </a>
+            </body>
+        </div>
+    </div>
+</html>
