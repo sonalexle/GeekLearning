@@ -1,3 +1,5 @@
+# A script for training different pytorch lightning models
+
 if __name__ == "__main__":
 
     from utils import argparser
@@ -64,12 +66,12 @@ if __name__ == "__main__":
         )
         trainer.fit(model, dm)
     trainer.test()
-    ckpt_path = f"../checkpoints/shuffled/{args.model}.ckpt"
+    ckpt_path = f"../checkpoints/{args.model}-latest.ckpt"
     if args.ckpt_path:
         ckpt_path = args.ckpt_path
     trainer.save_checkpoint(ckpt_path)
     print(f"Saved model to {ckpt_path}")
-
+    # Note that Tensorlogger will automatically save the model version with the best accuracy/loss.
     h5trainfile.close()
     if h5testfile:
         h5testfile.close()

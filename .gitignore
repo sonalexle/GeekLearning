@@ -133,3 +133,11 @@ data/
 papers/
 logs/
 checkpoints/
+flask-venv/
+get-prediction/libtorch
+get-prediction/build
+docs/graphics
+docs/old
+docs/report_cache
+random_imgs/
+flask-app/venv

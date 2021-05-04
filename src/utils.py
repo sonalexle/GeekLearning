@@ -1,3 +1,5 @@
+# A script containing various utilities for the project
+
 import pandas as pd
 import argparse
 import matplotlib.pyplot as plt
@@ -12,6 +14,9 @@ from PIL import Image, ImageFile
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+# These are for command line argument parsing in some other scripts.
+# This parsing solution was implemented before I knew the existence of the `argparse` library.
+# And I'm too lazy to re-implement CL arg parsing in those scripts.
 help_args = ("g", "help")
 indir, indir_args = None, ("i:", "indir=")
 outformat, outformat_args = None, ("f:", "format=")
@@ -264,25 +269,8 @@ def predict_one(img_path, model, classes, input_size=(64, 64), input_mode="RGB")
     return img, pred
 
 
+def to_torchscript_and_save(model, filename, method):
+    assert method == 'script' or method == 'trace', "method should be \'script\' or \'trace\'"
+    script = model.to_torchscript(method=method)
+    torch.jit.freeze(script).save(filename)
 
-if __name__ == "__main__":
-    import shutil, glob, sys, os
-    from tqdm import tqdm
-
-    help_str = (
-        "-g for help, -i for input directories, -o for name and location of the csv"
-    )
-    arguments, values = return_args(help_args, indir_args, outdir_args)
-    for current_argument, current_value in arguments:
-        if current_argument in make_args(help_args):
-            print(help_str)
-            sys.exit()
-        elif current_argument in make_args(indir_args):
-            indir = current_value
-        elif current_argument in make_args(outdir_args):
-            outdir = current_value
-    if not indir:
-        print("You need at least one input directory")
-        sys.exit(1)
-    outdir = outdir if outdir else "imagesandlabels.csv"
-    make_df(indir, outdir, csv=True, header=not os.path.exists(outdir))
