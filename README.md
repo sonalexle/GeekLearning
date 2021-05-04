@@ -15,7 +15,7 @@ See `src/train_models.py` for more information on how models were trained.
 
 For inference, the models were [traced](https://pytorch.org/docs/stable/jit.html) to reduce the file size of saved models. 
 
-The Flask application is available as a Docker image, which can be found here. Note that the image is large in size (~2GB).
+The Flask application is available as a Docker image, which can be found [here](https://hub.docker.com/r/sonalexle/geeklearning). Note that the image is large in size (~2GB). To run the container, try `docker run --rm -p 8080:5000 sonalexle/geeklearning` and go to `http://localhost:8080` in your browser. Locally, the exposed port is 5000. The only requirement to run the app locally is a working Docker installation.
 
 Ideas to improve the project (arranged in decreasing order of importance):
 
