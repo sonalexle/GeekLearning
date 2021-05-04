@@ -1,2 +1,2 @@
 # GeekLearning
-A repository for the projct for course Machine Learning at Aalto University
+A repository for the project for the course Machine Learning at Aalto University.
