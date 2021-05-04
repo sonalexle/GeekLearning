@@ -5,7 +5,7 @@ See the documentation in `docs/report.pdf` for more information.
 Only the report was submitted to the course. Models not described in the report 
 are recent additions.
 
-[Check out how models perform here](https://geeklearning.herokuapp.com/)
+[Check out how models perform here (please wait for the app to boot up)](https://geeklearning.herokuapp.com/)
 
 Models were trained with 64x64 RGB images. In particular, the ResNet-50 was trained with the 
 transfer-learning technique (using pretrained weights as a starting point). The details of ResNet-50 training 
