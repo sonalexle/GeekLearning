@@ -1,4 +1,4 @@
-# A script for training different pytorch lightning models
+# A script for training different pytorch-lightning models
 
 if __name__ == "__main__":
 

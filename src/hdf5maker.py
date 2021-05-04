@@ -1,6 +1,9 @@
-# A script for making HDF5 files from image folders
-# Expected structure: see https://pytorch.org/vision/stable/datasets.html#imagefolder
-# Note that inside the root directory (and all sub-dirs) there SHOULD NOT be any non-image files.
+""" HDF5 File Maker script
+
+A script for making HDF5 files from image folders.
+Expected structure: see https://pytorch.org/vision/stable/datasets.html#imagefolder
+Note that inside the root directory (and all sub-dirs) there SHOULD NOT be any non-image files.
+"""
 
 if __name__ == "__main__":
     import h5py, os, glob, argparse

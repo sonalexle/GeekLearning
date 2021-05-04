@@ -1,3 +1,9 @@
+""" Image processing script
+
+Helper script to resize and/or change color mode of images.
+"""
+
+
 if __name__ == "__main__":
 
     from PIL import Image, ImageFile
